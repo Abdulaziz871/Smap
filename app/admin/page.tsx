@@ -2,11 +2,17 @@
 
 import { useState, useEffect } from 'react';
 
+interface Stats {
+  collection?: string;
+  count?: number;
+  [key: string]: any;
+}
+
 export default function AdminPanel() {
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState('users');
-  const [stats, setStats] = useState({});
+  const [stats, setStats] = useState<Stats>({});
 
   const collections = [
     { value: 'users', label: 'Users' },
