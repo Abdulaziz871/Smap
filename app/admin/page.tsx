@@ -57,7 +57,7 @@ export default function AdminPanel() {
         alert('Error initializing database: ' + result.error);
       }
     } catch (error) {
-      alert('Network error: ' + error.message);
+      alert('Network error: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
