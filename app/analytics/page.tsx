@@ -182,7 +182,7 @@ export default function Analytics() {
     }
   };
 
-  const handlePlatformChange = (platform: 'youtube' | 'facebook' | 'instagram') => {
+  const handlePlatformChange = (platform: 'youtube' | 'facebook' | 'instagram' | 'tiktok') => {
     setSelectedPlatform(platform);
     if (user) {
       if (platform === 'youtube' && !youtubeAnalytics) {
