@@ -63,11 +63,11 @@ export default function AdminPanel() {
     }
   };
 
-  const renderValue = (value) => {
+  const renderValue = (value: any): string => {
     if (value === null || value === undefined) return 'null';
     if (typeof value === 'object') return JSON.stringify(value, null, 2);
     if (typeof value === 'boolean') return value.toString();
-    return value;
+    return String(value);
   };
 
   return (
