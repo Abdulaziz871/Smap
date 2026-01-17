@@ -15,10 +15,26 @@ interface PlatformSummary {
   connected: boolean;
 }
 
+interface ContentItem {
+  id: string;
+  platform: string;
+  platformColor: string;
+  title: string;
+  type: 'video' | 'post';
+  views: number;
+  likes: number;
+  comments: number;
+  engagement: number;
+  publishedAt: string;
+  thumbnail?: string;
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [platformSummaries, setPlatformSummaries] = useState<PlatformSummary[]>([]);
+  const [allContent, setAllContent] = useState<ContentItem[]>([]);
+  const [postingActivity, setPostingActivity] = useState<{date: string, count: number, platform: string}[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -34,6 +50,8 @@ export default function Dashboard() {
   const fetchAllPlatformData = async (userId: string) => {
     setLoading(true);
     const summaries: PlatformSummary[] = [];
+    const allContentItems: ContentItem[] = [];
+    const activityData: {date: string, count: number, platform: string}[] = [];
 
     try {
       // Check connected platforms
@@ -70,6 +88,35 @@ export default function Dashboard() {
               connected: true
             });
             console.log('✅ YouTube summary added:', summaries[summaries.length - 1]);
+            
+            // Store YouTube videos for content list
+            if (data.analytics.topVideos) {
+              const youtubeContent: ContentItem[] = data.analytics.topVideos.map((video: any) => ({
+                id: video.videoId,
+                platform: 'YouTube',
+                platformColor: '#FF0000',
+                title: video.title || 'Untitled Video',
+                type: 'video' as const,
+                views: video.viewCount || 0,
+                likes: video.likeCount || 0,
+                comments: video.commentCount || 0,
+                engagement: video.viewCount ? ((video.likeCount + video.commentCount) / video.viewCount * 100) : 0,
+                publishedAt: video.publishedAt,
+                thumbnail: video.thumbnails?.default?.url
+              }));
+              allContentItems.push(...youtubeContent);
+              
+              // Store posting activity
+              data.analytics.topVideos.forEach((video: any) => {
+                if (video.publishedAt) {
+                  activityData.push({
+                    date: video.publishedAt.split('T')[0],
+                    count: 1,
+                    platform: 'YouTube'
+                  });
+                }
+              });
+            }
           } else {
             console.error('❌ YouTube API failed:', data.error || 'Unknown error');
           }
@@ -98,6 +145,42 @@ export default function Dashboard() {
               posts: data.analytics.posts?.length || 0,
               connected: true
             });
+            
+            // Store Facebook posts for content list
+            if (data.analytics.posts) {
+              const facebookContent: ContentItem[] = data.analytics.posts.map((post: any) => {
+                const insights = post.insights?.data || [];
+                const reachInsight = insights.find((i: any) => i.name === 'post_impressions_unique');
+                const engagementInsight = insights.find((i: any) => i.name === 'post_engaged_users');
+                const reach = reachInsight?.values?.[0]?.value || 0;
+                const engaged = engagementInsight?.values?.[0]?.value || 0;
+                
+                return {
+                  id: post.id,
+                  platform: 'Facebook',
+                  platformColor: '#1877F2',
+                  title: post.message || post.story || 'Facebook Post',
+                  type: 'post' as const,
+                  views: reach,
+                  likes: post.likes?.summary?.total_count || 0,
+                  comments: post.comments?.summary?.total_count || 0,
+                  engagement: reach ? (engaged / reach * 100) : 0,
+                  publishedAt: post.created_time
+                };
+              });
+              allContentItems.push(...facebookContent);
+              
+              // Store posting activity
+              data.analytics.posts.forEach((post: any) => {
+                if (post.created_time) {
+                  activityData.push({
+                    date: post.created_time.split('T')[0],
+                    count: 1,
+                    platform: 'Facebook'
+                  });
+                }
+              });
+            }
           }
         } catch (err) {
           console.error('Error fetching Facebook data:', err);
@@ -131,6 +214,11 @@ export default function Dashboard() {
       }
 
       setPlatformSummaries(summaries);
+      
+      // Sort content by engagement and set state
+      allContentItems.sort((a, b) => b.engagement - a.engagement);
+      setAllContent(allContentItems);
+      setPostingActivity(activityData);
     } catch (error) {
       console.error('Error fetching platform data:', error);
     } finally {
@@ -156,7 +244,7 @@ export default function Dashboard() {
     <div style={{display: 'flex', minHeight: '100vh', background: '#F9FAFB'}}>
       <Sidebar activePage="dashboard" />
       
-      <main className="main-content" style={{background: '#F9FAFB'}}>
+      <main className="main-content" style={{background: '#F9FAFB', overflow: 'hidden'}}>
         {/* Modern Gradient Header */}
         <div style={{
 
@@ -219,8 +307,8 @@ export default function Dashboard() {
             {/* Overview Cards */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-              gap: '1.5rem',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '1rem',
               marginBottom: '2rem'
             }}>
               <OverviewCard
@@ -257,18 +345,18 @@ export default function Dashboard() {
             {platformSummaries.length > 0 ? (
               <div style={{
                 background: 'white',
-                padding: '2rem',
+                padding: '1.5rem',
                 borderRadius: '12px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                 marginBottom: '2rem'
               }}>
-                <h2 style={{margin: '0 0 1.5rem 0', color: '#2A4759', fontSize: '1.5rem'}}>
+                <h2 style={{margin: '0 0 1.5rem 0', color: '#2A4759', fontSize: '1.3rem', fontWeight: '600'}}>
                   Platform Overview
                 </h2>
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                  gap: '1.5rem'
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gap: '1rem'
                 }}>
                   {platformSummaries.map((platform) => (
                     <PlatformCard key={platform.platform} platform={platform} />
@@ -312,8 +400,8 @@ export default function Dashboard() {
             {platformSummaries.length > 0 && (
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-                gap: '1.5rem',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '1rem',
                 marginBottom: '2rem'
               }}>
                 {/* Followers Chart */}
@@ -321,7 +409,8 @@ export default function Dashboard() {
                   background: 'white',
                   padding: '1.5rem',
                   borderRadius: '12px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  minHeight: '350px'
                 }}>
                   <h3 style={{
                     margin: '0 0 1rem 0',
@@ -342,7 +431,8 @@ export default function Dashboard() {
                   background: 'white',
                   padding: '1.5rem',
                   borderRadius: '12px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  minHeight: '350px'
                 }}>
                   <h3 style={{
                     margin: '0 0 1rem 0',
@@ -382,6 +472,167 @@ export default function Dashboard() {
                   Platform Performance
                 </h3>
                 <PlatformTable platforms={platformSummaries} />
+              </div>
+            )}
+
+            {/* NEW SECTIONS */}
+            
+            {/* Top Performing Content */}
+            {allContent.length > 0 && (
+              <div style={{
+                background: 'white',
+                padding: '1.5rem',
+                borderRadius: '12px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                marginBottom: '2rem',
+                overflowX: 'auto'
+              }}>
+                <h3 style={{
+                  margin: '0 0 1.5rem 0',
+                  color: '#2A4759',
+                  fontSize: '1.2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <i className="fas fa-trophy" style={{ color: '#F79B72' }}></i>
+                  Top Performing Content
+                </h3>
+                <TopPerformingContent content={allContent.slice(0, 5)} />
+              </div>
+            )}
+
+            {/* Platform Comparison Grid */}
+            {platformSummaries.length > 1 && (
+              <div style={{
+                background: 'white',
+                padding: '1.5rem',
+                borderRadius: '12px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                marginBottom: '2rem',
+                overflowX: 'auto'
+              }}>
+                <h3 style={{
+                  margin: '0 0 1.5rem 0',
+                  color: '#2A4759',
+                  fontSize: '1.2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <i className="fas fa-th-large" style={{ color: '#F79B72' }}></i>
+                  Platform Comparison
+                </h3>
+                <PlatformComparisonGrid platforms={platformSummaries} />
+              </div>
+            )}
+
+            {/* Engagement Breakdown & Content Performance Timeline */}
+            {allContent.length > 0 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '1rem',
+                marginBottom: '2rem'
+              }}>
+                {/* Engagement Breakdown */}
+                <div style={{
+                  background: 'white',
+                  padding: '1.5rem',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  minHeight: '350px'
+                }}>
+                  <h3 style={{
+                    margin: '0 0 1rem 0',
+                    color: '#2A4759',
+                    fontSize: '1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}>
+                    <i className="fas fa-heart" style={{ color: '#F79B72' }}></i>
+                    Engagement Breakdown
+                  </h3>
+                  <EngagementBreakdownChart content={allContent} />
+                </div>
+
+                {/* Content Performance Timeline */}
+                <div style={{
+                  background: 'white',
+                  padding: '1.5rem',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  minHeight: '350px'
+                }}>
+                  <h3 style={{
+                    margin: '0 0 1rem 0',
+                    color: '#2A4759',
+                    fontSize: '1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}>
+                    <i className="fas fa-chart-area" style={{ color: '#F79B72' }}></i>
+                    Content Performance Timeline
+                  </h3>
+                  <ContentPerformanceTimeline content={allContent} />
+                </div>
+              </div>
+            )}
+
+            {/* Recent Activity Feed */}
+            {allContent.length > 0 && (
+              <div style={{
+                background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                padding: '1.5rem',
+                borderRadius: '16px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                marginBottom: '2rem',
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '1.5rem'
+                }}>
+                  <h3 style={{
+                    margin: 0,
+                    color: '#2A4759',
+                    fontSize: '1.3rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    fontWeight: '700'
+                  }}>
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      background: 'linear-gradient(135deg, #F79B72 0%, #e8845c 100%)',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <i className="fas fa-stream" style={{ color: 'white', fontSize: '1rem' }}></i>
+                    </div>
+                    Recent Activity
+                  </h3>
+                  <span style={{
+                    fontSize: '0.85rem',
+                    color: '#6B7280',
+                    background: '#f3f4f6',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '20px',
+                    fontWeight: '500'
+                  }}>
+                    Last {Math.min(allContent.length, 6)} items
+                  </span>
+                </div>
+                <RecentActivityFeed content={allContent.sort((a, b) => 
+                  new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+                ).slice(0, 6)} />
               </div>
             )}
 
@@ -792,5 +1043,586 @@ function PlatformTable({ platforms }: { platforms: PlatformSummary[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+// Top Performing Content Component
+function TopPerformingContent({ content }: { content: ContentItem[] }) {
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {content.map((item, index) => (
+        <div key={item.id} style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          padding: '1rem',
+          background: index === 0 ? 'linear-gradient(135deg, #FFF9E6 0%, #FFF3CD 100%)' : '#f8fafc',
+          borderRadius: '12px',
+          border: index === 0 ? '2px solid #FFD700' : '1px solid #e5e7eb',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateX(4px)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateX(0)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}>
+          {/* Rank Badge */}
+          <div style={{
+            width: '36px',
+            height: '36px',
+            background: index === 0 ? 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)' :
+                       index === 1 ? 'linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%)' :
+                       index === 2 ? 'linear-gradient(135deg, #CD7F32 0%, #B87333 100%)' :
+                       'linear-gradient(135deg, #6B7280 0%, #4B5563 100%)',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: '700',
+            fontSize: '0.9rem',
+            flexShrink: 0
+          }}>
+            #{index + 1}
+          </div>
+
+          {/* Platform Icon */}
+          <div style={{
+            width: '40px',
+            height: '40px',
+            background: item.platformColor,
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '1.2rem',
+            flexShrink: 0
+          }}>
+            <i className={item.platform === 'YouTube' ? 'fab fa-youtube' : 'fab fa-facebook'}></i>
+          </div>
+
+          {/* Content Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontWeight: '600',
+              color: '#1F2937',
+              fontSize: '0.95rem',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              marginBottom: '0.25rem'
+            }}>
+              {item.title}
+            </div>
+            <div style={{
+              fontSize: '0.8rem',
+              color: '#6B7280',
+              display: 'flex',
+              gap: '1rem'
+            }}>
+              <span><i className="fas fa-eye" style={{ marginRight: '0.25rem' }}></i>{formatNumber(item.views)}</span>
+              <span><i className="fas fa-heart" style={{ marginRight: '0.25rem' }}></i>{formatNumber(item.likes)}</span>
+              <span><i className="fas fa-comment" style={{ marginRight: '0.25rem' }}></i>{formatNumber(item.comments)}</span>
+            </div>
+          </div>
+
+          {/* Engagement Rate */}
+          <div style={{
+            padding: '0.5rem 1rem',
+            background: `${item.platformColor}15`,
+            borderRadius: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            flexShrink: 0
+          }}>
+            <i className="fas fa-chart-line" style={{ color: item.platformColor, fontSize: '0.8rem' }}></i>
+            <span style={{ fontWeight: '700', color: item.platformColor, fontSize: '0.9rem' }}>
+              {item.engagement.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Platform Comparison Grid Component
+function PlatformComparisonGrid({ platforms }: { platforms: PlatformSummary[] }) {
+  const metrics = [
+    { key: 'followers', label: 'Followers', icon: 'fas fa-users', format: (v: number) => v >= 1000 ? (v/1000).toFixed(1) + 'K' : v.toString() },
+    { key: 'posts', label: 'Posts', icon: 'fas fa-file-alt', format: (v: number) => v.toString() },
+    { key: 'engagement', label: 'Engagement', icon: 'fas fa-chart-line', format: (v: number) => v.toFixed(1) + '%' }
+  ];
+
+  // Find winner for each metric
+  const getWinner = (key: string) => {
+    let winner = platforms[0];
+    platforms.forEach(p => {
+      if ((p as any)[key] > (winner as any)[key]) {
+        winner = p;
+      }
+    });
+    return winner.platform;
+  };
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '500px' }}>
+        <thead>
+          <tr>
+            <th style={{ 
+              padding: '1rem', 
+              textAlign: 'left', 
+              background: '#f8fafc',
+              borderRadius: '8px 0 0 0',
+              color: '#6B7280',
+              fontWeight: '600',
+              fontSize: '0.9rem'
+            }}>
+              Metric
+            </th>
+            {platforms.map((platform, idx) => (
+              <th key={platform.platform} style={{ 
+                padding: '1rem', 
+                textAlign: 'center', 
+                background: '#f8fafc',
+                borderRadius: idx === platforms.length - 1 ? '0 8px 0 0' : '0',
+                color: platform.color,
+                fontWeight: '700'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    background: platform.color,
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white'
+                  }}>
+                    <i className={platform.icon}></i>
+                  </div>
+                  {platform.platform}
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.map((metric, idx) => {
+            const winner = getWinner(metric.key);
+            return (
+              <tr key={metric.key} style={{ borderBottom: idx < metrics.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
+                <td style={{ padding: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <i className={metric.icon} style={{ color: '#F79B72', fontSize: '1rem' }}></i>
+                    <span style={{ fontWeight: '600', color: '#374151' }}>{metric.label}</span>
+                  </div>
+                </td>
+                {platforms.map((platform) => {
+                  const value = (platform as any)[metric.key];
+                  const isWinner = platform.platform === winner;
+                  return (
+                    <td key={platform.platform} style={{ 
+                      padding: '1rem', 
+                      textAlign: 'center',
+                      background: isWinner ? `${platform.color}10` : 'transparent'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        <span style={{ 
+                          fontWeight: isWinner ? '700' : '500', 
+                          color: isWinner ? platform.color : '#374151',
+                          fontSize: isWinner ? '1.1rem' : '1rem'
+                        }}>
+                          {metric.format(value)}
+                        </span>
+                        {isWinner && (
+                          <i className="fas fa-crown" style={{ color: '#FFD700', fontSize: '0.8rem' }}></i>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Engagement Breakdown Chart Component
+function EngagementBreakdownChart({ content }: { content: ContentItem[] }) {
+  useEffect(() => {
+    const ctx = document.getElementById('engagementBreakdownChart') as HTMLCanvasElement;
+    if (!ctx) return;
+
+    // @ts-ignore
+    if (window.engagementBreakdownChartInstance) {
+      // @ts-ignore
+      window.engagementBreakdownChartInstance.destroy();
+    }
+
+    // Calculate total engagement metrics
+    const totalLikes = content.reduce((sum, item) => sum + item.likes, 0);
+    const totalComments = content.reduce((sum, item) => sum + item.comments, 0);
+    const totalViews = content.reduce((sum, item) => sum + item.views, 0);
+
+    import('chart.js/auto').then((ChartJS) => {
+      // @ts-ignore
+      window.engagementBreakdownChartInstance = new ChartJS.default(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Likes', 'Comments', 'Views'],
+          datasets: [{
+            data: [totalLikes, totalComments, Math.round(totalViews / 100)],
+            backgroundColor: ['#EF4444', '#3B82F6', '#10B981'],
+            borderColor: '#ffffff',
+            borderWidth: 3,
+            hoverOffset: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          cutout: '55%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                padding: 20,
+                font: { size: 12, weight: 'bold' as const },
+                usePointStyle: true,
+                pointStyle: 'circle'
+              }
+            },
+            tooltip: {
+              backgroundColor: '#2A4759',
+              padding: 12,
+              titleFont: { size: 14, weight: 'bold' },
+              bodyFont: { size: 13 },
+              callbacks: {
+                label: (context: any) => {
+                  const label = context.label || '';
+                  let value = context.raw;
+                  if (label === 'Views') value = value * 100;
+                  if (value >= 1000000) return `${label}: ${(value / 1000000).toFixed(1)}M`;
+                  if (value >= 1000) return `${label}: ${(value / 1000).toFixed(1)}K`;
+                  return `${label}: ${value.toLocaleString()}`;
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+
+    return () => {
+      // @ts-ignore
+      if (window.engagementBreakdownChartInstance) {
+        // @ts-ignore
+        window.engagementBreakdownChartInstance.destroy();
+      }
+    };
+  }, [content]);
+
+  return <canvas id="engagementBreakdownChart" style={{ maxHeight: '280px' }}></canvas>;
+}
+
+// Content Performance Timeline Chart Component
+function ContentPerformanceTimeline({ content }: { content: ContentItem[] }) {
+  useEffect(() => {
+    const ctx = document.getElementById('contentPerformanceTimeline') as HTMLCanvasElement;
+    if (!ctx) return;
+
+    // @ts-ignore
+    if (window.contentPerformanceTimelineInstance) {
+      // @ts-ignore
+      window.contentPerformanceTimelineInstance.destroy();
+    }
+
+    // Sort content by date and prepare data
+    const sortedContent = [...content].sort((a, b) => 
+      new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime()
+    ).slice(-10);
+
+    const labels = sortedContent.map(item => {
+      const date = new Date(item.publishedAt);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+
+    const viewsData = sortedContent.map(item => item.views);
+    const engagementData = sortedContent.map(item => item.likes + item.comments);
+
+    import('chart.js/auto').then((ChartJS) => {
+      // @ts-ignore
+      window.contentPerformanceTimelineInstance = new ChartJS.default(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Views',
+              data: viewsData,
+              borderColor: '#3B82F6',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              borderWidth: 3,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              pointBackgroundColor: '#3B82F6',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            },
+            {
+              label: 'Engagement',
+              data: engagementData,
+              borderColor: '#F79B72',
+              backgroundColor: 'rgba(247, 155, 114, 0.1)',
+              borderWidth: 3,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              pointBackgroundColor: '#F79B72',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                padding: 20,
+                font: { size: 12, weight: 'bold' as const },
+                usePointStyle: true
+              }
+            },
+            tooltip: {
+              backgroundColor: '#2A4759',
+              padding: 12,
+              titleFont: { size: 14, weight: 'bold' },
+              bodyFont: { size: 13 },
+              callbacks: {
+                label: (context: any) => {
+                  const value = context.parsed.y;
+                  if (value >= 1000000) return `${context.dataset.label}: ${(value / 1000000).toFixed(1)}M`;
+                  if (value >= 1000) return `${context.dataset.label}: ${(value / 1000).toFixed(1)}K`;
+                  return `${context.dataset.label}: ${value.toLocaleString()}`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: '#f0f0f0'
+              },
+              ticks: {
+                callback: (value: any) => {
+                  if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+                  if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
+                  return value;
+                }
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+    });
+
+    return () => {
+      // @ts-ignore
+      if (window.contentPerformanceTimelineInstance) {
+        // @ts-ignore
+        window.contentPerformanceTimelineInstance.destroy();
+      }
+    };
+  }, [content]);
+
+  return <canvas id="contentPerformanceTimeline" style={{ maxHeight: '280px' }}></canvas>;
+}
+
+// Recent Activity Feed Component
+function RecentActivityFeed({ content }: { content: ContentItem[] }) {
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {content.map((item, index) => (
+        <div key={item.id} style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          padding: '1rem 1.25rem',
+          background: index % 2 === 0 ? '#ffffff' : '#f8fafc',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          transition: 'all 0.2s ease',
+          cursor: 'pointer'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateX(4px)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+          e.currentTarget.style.borderColor = item.platformColor;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateX(0)';
+          e.currentTarget.style.boxShadow = 'none';
+          e.currentTarget.style.borderColor = '#e5e7eb';
+        }}>
+          {/* Platform Icon */}
+          <div style={{
+            width: '48px',
+            height: '48px',
+            background: `linear-gradient(135deg, ${item.platformColor} 0%, ${item.platformColor}dd 100%)`,
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '1.4rem',
+            flexShrink: 0,
+            boxShadow: `0 4px 12px ${item.platformColor}40`
+          }}>
+            <i className={item.platform === 'YouTube' ? 'fab fa-youtube' : 'fab fa-facebook'}></i>
+          </div>
+
+          {/* Content */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontWeight: '600',
+              color: '#1F2937',
+              fontSize: '0.95rem',
+              lineHeight: '1.4',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              marginBottom: '0.35rem'
+            }}>
+              {item.title}
+            </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: '0.8rem',
+              color: '#6B7280'
+            }}>
+              <span style={{
+                background: `${item.platformColor}15`,
+                color: item.platformColor,
+                padding: '0.2rem 0.6rem',
+                borderRadius: '12px',
+                fontWeight: '600',
+                fontSize: '0.7rem',
+                textTransform: 'uppercase'
+              }}>
+                {item.platform}
+              </span>
+              <span style={{ color: '#d1d5db' }}>•</span>
+              <span>{formatDate(item.publishedAt)}</span>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div style={{
+            display: 'flex',
+            gap: '1.5rem',
+            flexShrink: 0
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ 
+                fontSize: '1rem', 
+                fontWeight: '700', 
+                color: '#1F2937',
+                marginBottom: '0.15rem'
+              }}>
+                {formatNumber(item.views)}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Views
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ 
+                fontSize: '1rem', 
+                fontWeight: '700', 
+                color: '#EF4444',
+                marginBottom: '0.15rem'
+              }}>
+                {formatNumber(item.likes)}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Likes
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ 
+                fontSize: '1rem', 
+                fontWeight: '700', 
+                color: '#3B82F6',
+                marginBottom: '0.15rem'
+              }}>
+                {formatNumber(item.comments)}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Comments
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

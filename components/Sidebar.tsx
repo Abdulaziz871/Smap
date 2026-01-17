@@ -211,6 +211,41 @@ export default function Sidebar({ activePage }: SidebarProps) {
             </a>
           </li>
           <li style={{margin: '0.25rem 1rem'}}>
+            <a href="/schedule" style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0.875rem 1rem',
+              color: isActive('schedule') ? 'white' : 'rgba(255, 255, 255, 0.8)',
+              textDecoration: 'none',
+              background: isActive('schedule') ? 'linear-gradient(135deg, #F79B72 0%, #e8845c 100%)' : 'transparent',
+              borderRadius: '8px',
+              fontWeight: isActive('schedule') ? '600' : '500',
+              fontSize: '0.95rem',
+              boxShadow: isActive('schedule') ? '0 2px 8px rgba(247, 155, 114, 0.2)' : 'none',
+              transition: 'all 0.3s ease'
+            }} onMouseOver={(e) => {
+              if (!isActive('schedule')) {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.color = 'white';
+                e.currentTarget.style.transform = 'translateX(2px)';
+              }
+            }} onMouseOut={(e) => {
+              if (!isActive('schedule')) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
+                e.currentTarget.style.transform = 'translateX(0)';
+              }
+            }}>
+              <i className="fas fa-calendar-alt" style={{
+                marginRight: '0.75rem',
+                fontSize: '1.1rem',
+                width: '20px',
+                textAlign: 'center'
+              }}></i>
+              Schedule & AI
+            </a>
+          </li>
+          <li style={{margin: '0.25rem 1rem'}}>
             <a href="/settings" style={{
               display: 'flex',
               alignItems: 'center',

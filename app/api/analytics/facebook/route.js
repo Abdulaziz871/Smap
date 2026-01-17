@@ -106,6 +106,8 @@ export async function POST(request) {
     
     const { userId, forceRefresh } = await request.json();
     
+    console.log('📊 Facebook POST request:', { userId, forceRefresh });
+    
     if (!userId) {
       return Response.json(
         { error: 'User ID is required' },
@@ -120,7 +122,8 @@ export async function POST(request) {
       userFound: !!user,
       hasFacebookData: !!user?.facebookData,
       isConnected: user?.facebookData?.isConnected,
-      hasAccessToken: !!user?.facebookData?.pageAccessToken
+      hasAccessToken: !!user?.facebookData?.pageAccessToken,
+      forceRefresh
     });
     
     if (!user || !user.facebookData || !user.facebookData.isConnected) {

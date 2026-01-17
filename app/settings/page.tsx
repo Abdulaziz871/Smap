@@ -10,7 +10,7 @@ export default function Settings() {
     lastName: '',
     email: '',
     company: '',
-    profilePicture: null
+    profilePicture: null as string | null
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -157,7 +157,8 @@ export default function Settings() {
         console.error('Update failed:', data.error);
         setMessage({ type: 'error', text: data.error || 'Failed to update profile' });
       }
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error('Error saving profile:', error);
       setMessage({ type: 'error', text: 'Failed to save changes: ' + error.message });
     } finally {

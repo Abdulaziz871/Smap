@@ -88,8 +88,8 @@ export default function Reports() {
         a.style.display = 'none';
         a.href = url;
         
-        // Set CSV file extension
-        const fileExtension = 'csv';
+        // Set file extension based on format
+        const fileExtension = exportFormat.toLowerCase();
         
         a.download = `SMAP_Report_${new Date().toISOString().split('T')[0]}.${fileExtension}`;
         document.body.appendChild(a);
@@ -189,8 +189,8 @@ export default function Reports() {
               backdropFilter: 'blur(10px)'
             }}>
               <i className="fas fa-file-export" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}></i>
-              <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>1</div>
-              <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>Export Format</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>2</div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>Export Formats</div>
             </div>
             <div style={{
               background: 'rgba(255,255,255,0.2)',
@@ -200,8 +200,8 @@ export default function Reports() {
               backdropFilter: 'blur(10px)'
             }}>
               <i className="fas fa-download" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}></i>
-              <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>CSV</div>
-              <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>Available Format</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>CSV, PDF</div>
+              <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>Available Formats</div>
             </div>
           </div>
         </div>
@@ -310,9 +310,10 @@ export default function Reports() {
                   <i className="fas fa-file-export" style={{ marginRight: '0.5rem', color: '#F79B72' }}></i>
                   Export Format
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                   {[
-                    { format: 'CSV', icon: 'fas fa-file-csv', color: '#6F42C1' }
+                    { format: 'CSV', icon: 'fas fa-file-csv', color: '#22c55e' },
+                    { format: 'PDF', icon: 'fas fa-file-pdf', color: '#dc2626' }
                   ].map(({ format, icon, color }) => (
                     <label key={format} style={{
                       display: 'flex',

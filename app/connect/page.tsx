@@ -54,7 +54,6 @@ export default function ConnectAccounts() {
       fetchSocialAccounts(user._id);
     } else {
       console.log('No user ID found in localStorage'); // Debug log
-      setMessage('Please log in to connect your social media accounts.');
       
       // For demo purposes, auto-set a test user ID if no user is logged in
       // Remove this in production

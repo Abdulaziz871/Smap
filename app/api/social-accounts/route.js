@@ -21,6 +21,11 @@ export async function GET(request) {
       .populate('SMType_ID', 'SMType_Description iconUrl')
       .sort({ connected_at: -1 });
 
+    console.log(`📊 Social accounts for user ${userId}:`, accounts.map(a => ({ 
+      type: a.SMType_ID?.SMType_Description, 
+      username: a.username 
+    })));
+
     return Response.json({ accounts }, { status: 200 });
 
   } catch (error) {

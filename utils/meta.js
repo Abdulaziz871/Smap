@@ -39,7 +39,8 @@ const FACEBOOK_SCOPES = [
   'pages_read_user_content',  // Required to read Page posts
   'pages_show_list',
   'business_management',
-  'read_insights'
+  'read_insights',
+  'pages_manage_posts'  // Required to publish posts
 ];
 
 /**
@@ -53,7 +54,7 @@ export function getMetaAuthUrl(platform = 'instagram', state) {
     const params = new URLSearchParams({
       client_id: META_CONFIG.clientId,
       redirect_uri: META_CONFIG.redirectUri,
-      scope: 'pages_show_list,pages_read_engagement,business_management,pages_manage_metadata',
+      scope: 'pages_show_list,pages_read_engagement,business_management,pages_manage_metadata,read_insights',
       response_type: 'code',
       state: JSON.stringify({ platform, userId: state }),
       display: 'popup',
@@ -498,17 +499,50 @@ export async function getFacebookAnalytics(pageAccessToken, pageId, startDate = 
       const totalShares = analytics.recentPosts.reduce((sum, post) => sum + (post.shares?.count || 0), 0);
       const totalEngagement = totalLikes + totalComments + totalShares;
       
+      console.log('📊 Engagement calculation:', {
+        totalLikes,
+        totalComments,
+        totalShares,
+        totalEngagement,
+        postCount: analytics.recentPosts.length
+      });
+
       const averageEngagementPerPost = totalEngagement / analytics.recentPosts.length;
+      
+      // Get page fan count for engagement rate calculation
+      let fanCount = 0;
+      try {
+        const pageInfoUrl = `${META_CONFIG.baseUrl}/${pageId}?fields=fan_count,followers_count&access_token=${pageAccessToken}`;
+        const pageInfoResponse = await fetch(pageInfoUrl);
+        const pageInfoData = await pageInfoResponse.json();
+        fanCount = pageInfoData.fan_count || pageInfoData.followers_count || 0;
+        console.log(`📊 Fan count for engagement rate: ${fanCount}`);
+      } catch (e) {
+        console.log('Could not fetch fan count for engagement rate:', e.message);
+      }
+
+      // Calculate engagement rate: (total engagement / total reach or fans) * 100
+      let engagementRate = '0.00';
+      
+      if (fanCount > 0 && totalEngagement > 0) {
+        // Use total engagement / followers * 100 (like industry standard)
+        engagementRate = ((totalEngagement / fanCount) * 100).toFixed(2);
+        console.log(`📊 Engagement rate (total/fans): ${totalEngagement}/${fanCount}*100 = ${engagementRate}%`);
+      } else if (analytics.recentPosts.length > 0 && totalEngagement > 0) {
+        // Fallback: average engagement per post as percentage of post count
+        engagementRate = ((averageEngagementPerPost / 100) * 100).toFixed(2);
+        console.log(`📊 Engagement rate (fallback): ${engagementRate}%`);
+      }
       
       analytics.engagement = {
         averageLikes: Math.round(totalLikes / analytics.recentPosts.length),
         averageComments: Math.round(totalComments / analytics.recentPosts.length),
         averageShares: Math.round(totalShares / analytics.recentPosts.length),
         totalEngagement,
-        engagementRate: analytics.pageMetrics.fanCount > 0 
-          ? ((averageEngagementPerPost / analytics.pageMetrics.fanCount) * 100).toFixed(2)
-          : 0
+        engagementRate
       };
+      
+      console.log('📊 Final engagement object:', analytics.engagement);
     }
 
     return analytics;
@@ -563,6 +597,374 @@ export async function refreshMetaToken(accessToken) {
     return await getLongLivedToken(accessToken);
   } catch (error) {
     console.error('Error refreshing Meta token:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get Facebook Page Performance Metrics
+ * Fetches detailed performance insights like impressions, reach, engagement, views
+ */
+export async function getFacebookPerformanceMetrics(pageAccessToken, pageId, since, until) {
+  try {
+    // Default to last 28 days if no date range provided
+    const endDate = until || new Date();
+    const startDate = since || new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
+    
+    const sinceTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
+    const untilTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
+
+    console.log('📊 Fetching page-level performance metrics...');
+
+    const performance = {
+      dateRange: {
+        start: new Date(sinceTimestamp * 1000).toISOString().split('T')[0],
+        end: new Date(untilTimestamp * 1000).toISOString().split('T')[0]
+      },
+      metrics: {}
+    };
+
+    // Try different metric approaches
+    const metricsToTry = [
+      { name: 'page_impressions', period: 'day' },
+      { name: 'page_impressions', period: 'week' },
+      { name: 'page_impressions', period: 'days_28' },
+      { name: 'page_impressions_unique', period: 'days_28' },
+      { name: 'page_post_engagements', period: 'days_28' },
+      { name: 'page_views_total', period: 'days_28' },
+      { name: 'page_content_activity', period: 'day' },
+      { name: 'page_consumptions', period: 'days_28' },
+      { name: 'page_places_checkin_total', period: 'day' }
+    ];
+
+    for (const metric of metricsToTry) {
+      // Skip if we already have this metric
+      if (performance.metrics[metric.name]) continue;
+      
+      try {
+        let metricUrl;
+        if (metric.period === 'day' || metric.period === 'week') {
+          metricUrl = `${META_CONFIG.baseUrl}/${pageId}/insights/${metric.name}?since=${sinceTimestamp}&until=${untilTimestamp}&period=${metric.period}&access_token=${pageAccessToken}`;
+        } else {
+          metricUrl = `${META_CONFIG.baseUrl}/${pageId}/insights/${metric.name}?period=${metric.period}&access_token=${pageAccessToken}`;
+        }
+        
+        const response = await fetch(metricUrl);
+        const data = await response.json();
+
+        if (response.ok && data.data && data.data.length > 0) {
+          const metricData = data.data[0];
+          let totalValue;
+          
+          if (metric.period === 'days_28') {
+            // Get the most recent value for days_28 period
+            totalValue = metricData.values[metricData.values.length - 1]?.value || 0;
+          } else {
+            // Sum up daily/weekly values
+            totalValue = metricData.values.reduce((sum, day) => sum + (day.value || 0), 0);
+          }
+          
+          performance.metrics[metric.name] = {
+            total: totalValue,
+            period: metric.period,
+            description: metricData.description
+          };
+          
+          console.log(`✅ ${metric.name} (${metric.period}): ${totalValue}`);
+        } else {
+          console.log(`⚠️ ${metric.name} (${metric.period}) not available:`, data.error?.message || 'No data');
+        }
+      } catch (error) {
+        console.log(`❌ ${metric.name} failed:`, error.message);
+      }
+    }
+
+    // Get followers count
+    try {
+      const fansUrl = `${META_CONFIG.baseUrl}/${pageId}?fields=followers_count,fan_count&access_token=${pageAccessToken}`;
+      const response = await fetch(fansUrl);
+      const data = await response.json();
+      
+      if (response.ok) {
+        performance.metrics.followers = {
+          total: data.followers_count || data.fan_count || 0
+        };
+        console.log(`✅ followers: ${performance.metrics.followers.total}`);
+      }
+    } catch (e) {}
+
+    // Try to get total content views from published_posts insights
+    try {
+      console.log('📹 Fetching content/post insights...');
+      const postsUrl = `${META_CONFIG.baseUrl}/${pageId}/published_posts?fields=id,insights.metric(post_impressions,post_impressions_unique)&limit=50&access_token=${pageAccessToken}`;
+      const response = await fetch(postsUrl);
+      const data = await response.json();
+      
+      if (response.ok && data.data) {
+        let totalPostImpressions = 0;
+        let totalPostReach = 0;
+        
+        data.data.forEach(post => {
+          if (post.insights && post.insights.data) {
+            post.insights.data.forEach(insight => {
+              if (insight.name === 'post_impressions') {
+                totalPostImpressions += insight.values[0]?.value || 0;
+              }
+              if (insight.name === 'post_impressions_unique') {
+                totalPostReach += insight.values[0]?.value || 0;
+              }
+            });
+          }
+        });
+        
+        performance.metrics.content_impressions = { total: totalPostImpressions };
+        performance.metrics.content_reach = { total: totalPostReach };
+        console.log(`✅ content_impressions (from ${data.data.length} posts): ${totalPostImpressions}`);
+        console.log(`✅ content_reach: ${totalPostReach}`);
+      }
+    } catch (e) {
+      console.log('⚠️ Content insights not available:', e.message);
+    }
+
+    // Calculate summary - use content metrics if page metrics aren't available
+    const impressions = performance.metrics.page_impressions?.total || performance.metrics.content_impressions?.total || 0;
+    const reach = performance.metrics.page_impressions_unique?.total || performance.metrics.content_reach?.total || 0;
+    const engagements = performance.metrics.page_post_engagements?.total || 0;
+    const pageViews = performance.metrics.page_views_total?.total || 0;
+    const consumptions = performance.metrics.page_consumptions?.total || 0;
+    const followers = performance.metrics.followers?.total || 0;
+
+    // Calculate engagement rate - use reach, impressions, or followers (in priority order)
+    let engagementRate = 0;
+    if (reach > 0) {
+      engagementRate = ((engagements / reach) * 100).toFixed(2);
+    } else if (impressions > 0) {
+      engagementRate = ((engagements / impressions) * 100).toFixed(2);
+    } else if (followers > 0) {
+      engagementRate = ((engagements / followers) * 100).toFixed(2);
+    }
+
+    performance.summary = {
+      totalImpressions: impressions,
+      totalReach: reach,
+      totalEngagements: engagements,
+      totalPageViews: pageViews,
+      totalConsumptions: consumptions,
+      totalFollowers: followers,
+      engagementRate: engagementRate
+    };
+
+    console.log('📈 Performance Summary:', performance.summary);
+
+    return performance;
+  } catch (error) {
+    console.error('Error fetching Facebook performance metrics:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get Facebook Page Demographics Data
+ * Fetches audience demographics: location data
+ */
+export async function getFacebookDemographics(pageAccessToken, pageId) {
+  try {
+    console.log('👥 Fetching Facebook demographics...');
+
+    const demographics = {
+      cities: {},
+      countries: {},
+      followers: 0,
+      errors: []
+    };
+
+    // Try different metrics individually with different periods
+    const metricsToTry = [
+      { name: 'page_fans_city', period: 'lifetime' },
+      { name: 'page_fans_city', period: 'day' },
+      { name: 'page_fans_country', period: 'lifetime' },
+      { name: 'page_fans_country', period: 'day' }
+    ];
+
+    for (const metric of metricsToTry) {
+      try {
+        const url = `${META_CONFIG.baseUrl}/${pageId}/insights/${metric.name}?period=${metric.period}&access_token=${pageAccessToken}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (response.ok && data.data && data.data.length > 0) {
+          const latestValue = data.data[0].values[data.data[0].values.length - 1]?.value || {};
+          
+          if (metric.name === 'page_fans_city' && Object.keys(demographics.cities).length === 0) {
+            demographics.cities = Object.entries(latestValue)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 10)
+              .reduce((obj, [city, count]) => {
+                obj[city] = count;
+                return obj;
+              }, {});
+            console.log(`✅ ${metric.name} (${metric.period}): ${Object.keys(demographics.cities).length} cities`);
+          }
+          
+          if (metric.name === 'page_fans_country' && Object.keys(demographics.countries).length === 0) {
+            demographics.countries = Object.entries(latestValue)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 10)
+              .reduce((obj, [country, count]) => {
+                obj[country] = count;
+                return obj;
+              }, {});
+            console.log(`✅ ${metric.name} (${metric.period}): ${Object.keys(demographics.countries).length} countries`);
+          }
+        } else {
+          console.log(`⚠️ ${metric.name} (${metric.period}) not available`);
+        }
+      } catch (e) {
+        console.log(`❌ ${metric.name} failed`);
+      }
+    }
+
+    // Get followers count as fallback data
+    try {
+      const pageUrl = `${META_CONFIG.baseUrl}/${pageId}?fields=followers_count,fan_count,location,name&access_token=${pageAccessToken}`;
+      const response = await fetch(pageUrl);
+      const data = await response.json();
+      
+      if (response.ok) {
+        demographics.followers = data.followers_count || data.fan_count || 0;
+        demographics.pageName = data.name;
+        demographics.pageLocation = data.location;
+        console.log(`✅ Page followers: ${demographics.followers}`);
+      }
+    } catch (e) {}
+
+    // If no demographics data, create sample based on page info
+    if (Object.keys(demographics.cities).length === 0 && Object.keys(demographics.countries).length === 0) {
+      console.log('⚠️ Demographics not available via API. This may require additional permissions.');
+      demographics.message = 'Demographics data requires read_insights permission and may not be available for all pages.';
+    }
+
+    return demographics;
+  } catch (error) {
+    console.error('Error fetching Facebook demographics:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get Instagram Performance Metrics
+ */
+export async function getInstagramPerformanceMetrics(accessToken, instagramAccountId, since, until) {
+  try {
+    const endDate = until || new Date();
+    const startDate = since || new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
+    
+    const sinceTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
+    const untilTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
+
+    // Instagram metrics available
+    const metricsToFetch = [
+      'impressions',
+      'reach',
+      'profile_views',
+      'follower_count'
+    ];
+
+    const metricsParam = metricsToFetch.join(',');
+    const insightsUrl = `${META_CONFIG.baseUrl}/${instagramAccountId}/insights?metric=${metricsParam}&since=${sinceTimestamp}&until=${untilTimestamp}&period=day&access_token=${accessToken}`;
+
+    const response = await fetch(insightsUrl);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Failed to fetch Instagram insights');
+    }
+
+    const performance = {
+      dateRange: {
+        start: new Date(sinceTimestamp * 1000).toISOString().split('T')[0],
+        end: new Date(untilTimestamp * 1000).toISOString().split('T')[0]
+      },
+      metrics: {}
+    };
+
+    data.data.forEach(metric => {
+      const totalValue = metric.values.reduce((sum, day) => sum + (day.value || 0), 0);
+      const avgValue = totalValue / metric.values.length;
+      
+      performance.metrics[metric.name] = {
+        total: totalValue,
+        average: Math.round(avgValue),
+        trend: metric.values.map(v => ({ date: v.end_time, value: v.value || 0 }))
+      };
+    });
+
+    return performance;
+  } catch (error) {
+    console.error('Error fetching Instagram performance:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get Instagram Demographics
+ */
+export async function getInstagramDemographics(accessToken, instagramAccountId) {
+  try {
+    // Instagram demographic metrics
+    const demographicMetrics = [
+      'audience_gender_age',
+      'audience_city',
+      'audience_country'
+    ];
+
+    const metricsParam = demographicMetrics.join(',');
+    const insightsUrl = `${META_CONFIG.baseUrl}/${instagramAccountId}/insights?metric=${metricsParam}&period=lifetime&access_token=${accessToken}`;
+
+    const response = await fetch(insightsUrl);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Failed to fetch Instagram demographics');
+    }
+
+    const demographics = {
+      ageGender: {},
+      cities: {},
+      countries: {}
+    };
+
+    data.data.forEach(metric => {
+      const latestValue = metric.values[metric.values.length - 1]?.value || {};
+
+      switch (metric.name) {
+        case 'audience_gender_age':
+          demographics.ageGender = latestValue;
+          demographics.ageGroups = {};
+          demographics.gender = { M: 0, F: 0, U: 0 };
+          
+          Object.keys(latestValue).forEach(key => {
+            const [gender, ageRange] = key.split('.');
+            if (ageRange) {
+              demographics.ageGroups[ageRange] = (demographics.ageGroups[ageRange] || 0) + latestValue[key];
+              demographics.gender[gender] = (demographics.gender[gender] || 0) + latestValue[key];
+            }
+          });
+          break;
+
+        case 'audience_city':
+          demographics.cities = latestValue;
+          break;
+
+        case 'audience_country':
+          demographics.countries = latestValue;
+          break;
+      }
+    });
+
+    return demographics;
+  } catch (error) {
+    console.error('Error fetching Instagram demographics:', error);
     throw error;
   }
 }
