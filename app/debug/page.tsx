@@ -8,7 +8,7 @@ export default function DebugPage() {
 
   useEffect(() => {
     // Check localStorage
-    const userFromStorage = localStorage.getItem('user');
+    const userFromStorage = localStorage.getItem('smap_user') || localStorage.getItem('user');
     setLocalStorageData(userFromStorage || 'No user data in localStorage');
     
     if (userFromStorage) {
@@ -64,7 +64,8 @@ export default function DebugPage() {
       const data = await response.json();
       
       if (response.ok && data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('smap_user', JSON.stringify(data.user));
+        localStorage.setItem('user', JSON.stringify(data.user)); // legacy key for compatibility
         setUserInfo(data.user);
         alert('Logged in successfully!');
         window.location.reload();

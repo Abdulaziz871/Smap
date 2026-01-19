@@ -153,6 +153,7 @@ export default function Settings() {
         // Update localStorage with new data
         const updatedUser = { ...currentUser, ...data.user };
         localStorage.setItem('smap_user', JSON.stringify(updatedUser));
+        localStorage.setItem('user', JSON.stringify(updatedUser)); // legacy key for compatibility
       } else {
         console.error('Update failed:', data.error);
         setMessage({ type: 'error', text: data.error || 'Failed to update profile' });

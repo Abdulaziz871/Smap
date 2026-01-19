@@ -2306,7 +2306,18 @@ export default function Analytics() {
                       border: '1px solid #DDDDDD',
                       transition: 'all 0.3s ease',
                       cursor: 'pointer'
-                    }} onMouseOver={(e) => {
+                    }} 
+                    onClick={() => {
+                      if (post.permalink_url) {
+                        window.open(post.permalink_url, '_blank');
+                      } else if (post.id) {
+                        // Facebook post ID format is usually pageId_postId
+                        const postId = post.id.split('_')[1] || post.id;
+                        const pageId = post.id.split('_')[0];
+                        window.open(`https://www.facebook.com/${pageId}/posts/${postId}`, '_blank');
+                      }
+                    }}
+                    onMouseOver={(e) => {
                       e.currentTarget.style.transform = 'translateY(-2px)';
                       e.currentTarget.style.boxShadow = '0 8px 25px rgba(42, 71, 89, 0.15)';
                     }} onMouseOut={(e) => {

@@ -45,6 +45,7 @@ export default function Login() {
       if (response.ok) {
         // Store user data in localStorage
         localStorage.setItem('smap_user', JSON.stringify(data.user));
+        localStorage.setItem('user', JSON.stringify(data.user)); // legacy key for compatibility
         
         // Redirect to dashboard
         router.push('/dashboard');

@@ -44,24 +44,18 @@ export default function ConnectAccounts() {
 
   useEffect(() => {
     // Get user ID from localStorage (you might want to get this from context/session)
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    console.log('User from localStorage:', user); // Debug log
+    const storedUser = localStorage.getItem('smap_user') || localStorage.getItem('user');
+    const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+    console.log('User from localStorage:', parsedUser); // Debug log
     
-    if (user._id) {
-      console.log('Setting userId:', user._id); // Debug log
-      setUserId(user._id);
-      fetchYouTubeData(user._id);
-      fetchSocialAccounts(user._id);
+    if (parsedUser?._id) {
+      console.log('Setting userId:', parsedUser._id); // Debug log
+      setUserId(parsedUser._id);
+      fetchYouTubeData(parsedUser._id);
+      fetchSocialAccounts(parsedUser._id);
     } else {
       console.log('No user ID found in localStorage'); // Debug log
-      
-      // For demo purposes, auto-set a test user ID if no user is logged in
-      // Remove this in production
-      const demoUserId = '687aa89d4170c1ec23421982'; // testuser ID
-      setUserId(demoUserId);
-      fetchYouTubeData(demoUserId); // Also fetch data for demo user
-      fetchSocialAccounts(demoUserId);
-      console.log('Auto-setting test user ID for demo'); // Debug log
+      setMessage('Please log in to connect your accounts.');
     }
 
     // Check for URL parameters (success/error messages)
@@ -72,17 +66,15 @@ export default function ConnectAccounts() {
     if (success === 'youtube_connected') {
       setMessage('YouTube account connected successfully!');
       // Use the current userId state or the demo userId
-      const currentUserId = user._id || userId || '687aa89d4170c1ec23421982';
+      const currentUserId = parsedUser?._id || userId;
       fetchYouTubeData(currentUserId);
     } else if (success === 'meta_connected') {
       setMessage('Meta account connected successfully!');
-      // Use the current userId state or the demo userId
-      const currentUserId = user._id || userId || '687aa89d4170c1ec23421982';
+      const currentUserId = parsedUser?._id || userId;
       fetchSocialAccounts(currentUserId);
     } else if (success === 'tiktok_connected') {
       setMessage('TikTok account connected successfully!');
-      // Use the current userId state or the demo userId
-      const currentUserId = user._id || userId || '687aa89d4170c1ec23421982';
+      const currentUserId = parsedUser?._id || userId;
       fetchSocialAccounts(currentUserId);
     } else if (error) {
       const errorMessages: { [key: string]: string } = {
@@ -123,7 +115,7 @@ export default function ConnectAccounts() {
           setMessage(detailedMessage);
           console.log('✅ Account connected:', event.data.accountDetails);
           
-          const currentUserId = user._id || userId || '687aa89d4170c1ec23421982';
+          const currentUserId = parsedUser?._id || userId;
           // Refresh both social accounts and YouTube data
           fetchSocialAccounts(currentUserId);
           fetchYouTubeData(currentUserId);
@@ -141,7 +133,7 @@ export default function ConnectAccounts() {
       const metaSuccess = urlParams.get('meta_success');
       if (metaSuccess) {
         setMessage(`${metaSuccess} account connected successfully!`);
-        const currentUserId = user._id || userId || '687aa89d4170c1ec23421982';
+        const currentUserId = parsedUser?._id || userId;
         fetchSocialAccounts(currentUserId);
         // Clear URL parameters
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -482,7 +474,8 @@ export default function ConnectAccounts() {
       const data = await response.json();
       
       if (response.ok && data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('smap_user', JSON.stringify(data.user));
+        localStorage.setItem('user', JSON.stringify(data.user)); // legacy key for backwards compatibility
         setUserId(data.user._id);
         setMessage('Logged in successfully! You can now connect your accounts.');
         fetchYouTubeData(data.user._id);

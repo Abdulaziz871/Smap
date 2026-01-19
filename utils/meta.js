@@ -414,10 +414,11 @@ export async function getFacebookAnalytics(pageAccessToken, pageId, startDate = 
     // Handle pagination with aggressive rate limit protection
     try {
       let allPosts = [];
-      let postsUrl = `${META_CONFIG.baseUrl}/${pageId}/feed?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares&limit=100&access_token=${pageAccessToken}`;
+      // Keep requests small to avoid rate limits and 500 errors on large pages
+      let postsUrl = `${META_CONFIG.baseUrl}/${pageId}/feed?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares&limit=50&access_token=${pageAccessToken}`;
       let pageCount = 0;
-      const maxPages = 5; // Reduced to 5 pages (500 posts max) to avoid rate limits
-      const delayBetweenRequests = 1000; // Increased to 1 second between requests
+      const maxPages = 3; // 3 * 50 = 150 posts max
+      const delayBetweenRequests = 1500; // 1.5s between pages to ease rate limits
       
       console.log(`🔍 Fetching Facebook posts from /feed endpoint with pagination (max ${maxPages} pages, ${delayBetweenRequests}ms delay)`);
       
@@ -452,11 +453,11 @@ export async function getFacebookAnalytics(pageAccessToken, pageId, startDate = 
               }
               break;
             }
-          } else if (postsResponse.status === 500 || postsResponse.status === 400 || postsData.error) {
+          } else if (postsResponse.status === 500 || postsResponse.status === 400 || postsResponse.status === 429 || postsData.error) {
             // Rate limit or server error - use what we have so far
             console.warn(`⚠️ Facebook API error on page ${pageCount + 1}:`, postsData.error?.message || 'Server error');
             console.log(`📦 Successfully fetched ${allPosts.length} posts before hitting rate limit`);
-            console.log(`💡 Tip: The API has a rate limit. Consider waiting before fetching more data.`);
+            console.log(`💡 Tip: The API has a rate limit. Consider waiting before fetching more data or lowering page limits.`);
             break;
           } else {
             console.error('❌ Facebook posts API error:', postsData);
