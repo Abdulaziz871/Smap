@@ -390,45 +390,39 @@ export default function Analytics() {
           });
         }
         
-        // Recalculate engagement metrics based on filtered posts
+        // Recalculate engagement metrics based on filtered posts.
+        // NOTE: Our `/feed` fetch returns likes/comments/shares counts, not per-post insights.
         if (filteredData.posts && filteredData.posts.length > 0) {
-          const totalReach = filteredData.posts.reduce((sum: number, post: any) => {
-            const insights = post.insights?.data || [];
-            const reachInsight = insights.find((i: any) => i.name === 'post_impressions_unique');
-            return sum + (reachInsight?.values?.[0]?.value || 0);
-          }, 0);
+          const getLikes = (post: any) => post?.likes?.summary?.total_count ?? post?.likes ?? 0;
+          const getComments = (post: any) => post?.comments?.summary?.total_count ?? post?.comments ?? 0;
+          const getShares = (post: any) => post?.shares?.count ?? post?.shares ?? 0;
           
-          const totalEngagement = filteredData.posts.reduce((sum: number, post: any) => {
-            const insights = post.insights?.data || [];
-            const engagementInsight = insights.find((i: any) => i.name === 'post_engaged_users');
-            return sum + (engagementInsight?.values?.[0]?.value || 0);
-          }, 0);
-          
-          const totalImpressions = filteredData.posts.reduce((sum: number, post: any) => {
-            const insights = post.insights?.data || [];
-            const impressionsInsight = insights.find((i: any) => i.name === 'post_impressions');
-            return sum + (impressionsInsight?.values?.[0]?.value || 0);
-          }, 0);
-          
+          const totalLikes = filteredData.posts.reduce((sum: number, post: any) => sum + (getLikes(post) || 0), 0);
+          const totalComments = filteredData.posts.reduce((sum: number, post: any) => sum + (getComments(post) || 0), 0);
+          const totalShares = filteredData.posts.reduce((sum: number, post: any) => sum + (getShares(post) || 0), 0);
+          const totalEngagement = totalLikes + totalComments + totalShares;
           const postCount = filteredData.posts.length;
           
+          const fanCount = filteredData.pageMetrics?.fanCount || filteredData.pageMetrics?.followersCount || 0;
+          const engagementRate = fanCount > 0 ? ((totalEngagement / fanCount) * 100).toFixed(2) : '0.00';
+          
           filteredData.engagement = {
-            totalReach: totalReach,
-            totalEngagement: totalEngagement,
-            totalImpressions: totalImpressions,
-            postCount: postCount,
-            averageReach: Math.round(totalReach / postCount),
+            totalLikes,
+            totalComments,
+            totalShares,
+            totalEngagement,
+            postCount,
             averageEngagement: Math.round(totalEngagement / postCount),
-            engagementRate: totalReach > 0 ? ((totalEngagement / totalReach) * 100).toFixed(2) : '0.00'
+            engagementRate
           };
         } else {
           // No posts in date range
           filteredData.engagement = {
-            totalReach: 0,
+            totalLikes: 0,
+            totalComments: 0,
+            totalShares: 0,
             totalEngagement: 0,
-            totalImpressions: 0,
             postCount: 0,
-            averageReach: 0,
             averageEngagement: 0,
             engagementRate: '0.00'
           };
@@ -451,24 +445,21 @@ export default function Analytics() {
           filteredData.posts = [selectedPostData];
           filteredData.recentPosts = [selectedPostData];
           
-          // Get insights for the selected post
-          const insights = selectedPostData.insights?.data || [];
-          const reachInsight = insights.find((i: any) => i.name === 'post_impressions_unique');
-          const engagementInsight = insights.find((i: any) => i.name === 'post_engaged_users');
-          const impressionsInsight = insights.find((i: any) => i.name === 'post_impressions');
-          
-          const reach = reachInsight?.values?.[0]?.value || 0;
-          const engagement = engagementInsight?.values?.[0]?.value || 0;
-          const impressions = impressionsInsight?.values?.[0]?.value || 0;
+          const likes = selectedPostData?.likes?.summary?.total_count ?? selectedPostData?.likes ?? 0;
+          const comments = selectedPostData?.comments?.summary?.total_count ?? selectedPostData?.comments ?? 0;
+          const shares = selectedPostData?.shares?.count ?? selectedPostData?.shares ?? 0;
+          const totalEngagement = (likes || 0) + (comments || 0) + (shares || 0);
+          const fanCount = filteredData.pageMetrics?.fanCount || filteredData.pageMetrics?.followersCount || 0;
+          const engagementRate = fanCount > 0 ? ((totalEngagement / fanCount) * 100).toFixed(2) : '0.00';
           
           filteredData.engagement = {
-            totalReach: reach,
-            totalEngagement: engagement,
-            totalImpressions: impressions,
+            totalLikes: likes || 0,
+            totalComments: comments || 0,
+            totalShares: shares || 0,
+            totalEngagement,
             postCount: 1,
-            averageReach: reach,
-            averageEngagement: engagement,
-            engagementRate: reach > 0 ? ((engagement / reach) * 100).toFixed(2) : '0.00'
+            averageEngagement: totalEngagement,
+            engagementRate
           };
         }
         
