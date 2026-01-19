@@ -414,8 +414,9 @@ export async function getFacebookAnalytics(pageAccessToken, pageId, startDate = 
     // Handle pagination with aggressive rate limit protection
     try {
       let allPosts = [];
-      // Keep requests small to avoid rate limits and 500 errors on large pages
-      let postsUrl = `${META_CONFIG.baseUrl}/${pageId}/feed?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares&limit=50&access_token=${pageAccessToken}`;
+      // Keep requests small to avoid rate limits and 500 errors on large pages.
+      // Also request permalink_url so we can deep-link from the dashboard/UI.
+      let postsUrl = `${META_CONFIG.baseUrl}/${pageId}/feed?fields=id,message,created_time,permalink_url,likes.summary(true),comments.summary(true),shares&limit=50&access_token=${pageAccessToken}`;
       let pageCount = 0;
       const maxPages = 3; // 3 * 50 = 150 posts max
       const delayBetweenRequests = 1500; // 1.5s between pages to ease rate limits

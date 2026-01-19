@@ -138,13 +138,14 @@ export async function POST(request) {
       );
     }
     
-    // Check if we have recent analytics (within last hour) and not forcing refresh
+    // Check if we have recent analytics (within last hour) and not forcing refresh.
+    // Also ensure cached posts include permalink_url; older cached data won't.
     const lastUpdate = user.facebookData.lastAnalyticsUpdate;
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    
-    if (!forceRefresh && lastUpdate && new Date(lastUpdate) > oneHourAgo) {
-      const cachedAnalytics = user.facebookData.latestAnalytics;
-      // Add posts as an alias for recentPosts
+    const cachedAnalytics = user.facebookData.latestAnalytics;
+    const hasValidPermalinks = !!cachedAnalytics?.recentPosts?.[0]?.permalink_url;
+
+    if (!forceRefresh && lastUpdate && new Date(lastUpdate) > oneHourAgo && hasValidPermalinks) {
       if (cachedAnalytics) {
         cachedAnalytics.posts = cachedAnalytics.recentPosts || [];
       }

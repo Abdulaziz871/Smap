@@ -149,22 +149,23 @@ export default function Dashboard() {
             // Store Facebook posts for content list
             if (data.analytics.posts) {
               const facebookContent: ContentItem[] = data.analytics.posts.map((post: any) => {
-                const insights = post.insights?.data || [];
-                const reachInsight = insights.find((i: any) => i.name === 'post_impressions_unique');
-                const engagementInsight = insights.find((i: any) => i.name === 'post_engaged_users');
-                const reach = reachInsight?.values?.[0]?.value || 0;
-                const engaged = engagementInsight?.values?.[0]?.value || 0;
-                
+                const likes = post.likes?.summary?.total_count ?? 0;
+                const comments = post.comments?.summary?.total_count ?? 0;
+                const shares = post.shares?.count ?? 0;
+                const totalEngagement = likes + comments + shares;
+                const fanCount = data.analytics.pageMetrics?.fanCount || 0;
+                const engagementRate = fanCount > 0 ? (totalEngagement / fanCount * 100) : 0;
+
                 return {
                   id: post.id,
                   platform: 'Facebook',
                   platformColor: '#1877F2',
                   title: post.message || post.story || 'Facebook Post',
                   type: 'post' as const,
-                  views: reach,
-                  likes: post.likes?.summary?.total_count || 0,
-                  comments: post.comments?.summary?.total_count || 0,
-                  engagement: reach ? (engaged / reach * 100) : 0,
+                  views: totalEngagement, // treat engagement volume as "views" proxy for now
+                  likes,
+                  comments,
+                  engagement: engagementRate,
                   publishedAt: post.created_time
                 };
               });
@@ -1293,7 +1294,8 @@ function EngagementBreakdownChart({ content }: { content: ContentItem[] }) {
         data: {
           labels: ['Likes', 'Comments', 'Views'],
           datasets: [{
-            data: [totalLikes, totalComments, Math.round(totalViews / 100)],
+            // Use raw totals (no downscaling). Scaling only "Views" makes the chart misleading.
+            data: [totalLikes, totalComments, totalViews],
             backgroundColor: ['#EF4444', '#3B82F6', '#10B981'],
             borderColor: '#ffffff',
             borderWidth: 3,
@@ -1322,8 +1324,7 @@ function EngagementBreakdownChart({ content }: { content: ContentItem[] }) {
               callbacks: {
                 label: (context: any) => {
                   const label = context.label || '';
-                  let value = context.raw;
-                  if (label === 'Views') value = value * 100;
+                  const value = context.raw;
                   if (value >= 1000000) return `${label}: ${(value / 1000000).toFixed(1)}M`;
                   if (value >= 1000) return `${label}: ${(value / 1000).toFixed(1)}K`;
                   return `${label}: ${value.toLocaleString()}`;
